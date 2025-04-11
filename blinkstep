@@ -1,0 +1,65 @@
+local plr = game.Players.LocalPlayer
+local chr = plr.Character or plr.CharacterAdded:Wait()
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+local debounce = false
+local cooldown = 2
+
+-- Create the tool
+local tool = Instance.new("Tool")
+tool.RequiresHandle = false
+tool.Name = "blinkstep"
+tool.CanBeDropped = false
+tool.Parent = plr.Backpack
+
+-- When tool equipped
+tool.Equipped:Connect(function()
+	local inputConnection
+	inputConnection = uis.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed or debounce then return end
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			local hrp = chr:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+
+			-- Check if grounded
+			local rayOrigin = hrp.Position
+			local rayDirection = Vector3.new(0, -5, 0)
+			local params = RaycastParams.new()
+			params.FilterDescendantsInstances = {chr}
+			params.FilterType = Enum.RaycastFilterType.Blacklist
+			local result = workspace:Raycast(rayOrigin, rayDirection, params)
+			if not result then return end
+
+			debounce = true
+
+			-- Random direction & distance
+			local dirs = {
+				Vector3.new(1, 0, 0),
+				Vector3.new(-1, 0, 0),
+				Vector3.new(0, 0, 1),
+				Vector3.new(0, 0, -1)
+			}
+			local dir = dirs[math.random(1, #dirs)]
+			local dist = math.random(1, 10)
+			local targetPos = hrp.Position + dir * dist
+
+			-- Teleport flash
+			local flash = Instance.new("ParticleEmitter")
+			flash.Texture = "rbxassetid://483680291"
+			flash.Lifetime = NumberRange.new(0.2)
+			flash.Rate = 500
+			flash.Speed = NumberRange.new(6)
+			flash.Parent = hrp
+			game.Debris:AddItem(flash, 0.2)
+
+			hrp.CFrame = CFrame.new(targetPos)
+
+			task.wait(cooldown)
+			debounce = false
+		end
+	end)
+
+	tool.Unequipped:Connect(function()
+		if inputConnection then inputConnection:Disconnect() end
+	end)
+end)
