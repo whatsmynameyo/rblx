@@ -1,0 +1,72 @@
+local plr = game.Players.LocalPlayer
+local mouse = plr:GetMouse()
+local debris = game:GetService("Debris")
+
+local function createVitalBloom()
+	local tool = Instance.new("Tool")
+	tool.RequiresHandle = false
+	tool.Name = "Vital Bloom"
+
+	local function spawnHealOrb(position)
+		local rayParams = RaycastParams.new()
+		rayParams.FilterDescendantsInstances = {workspace}
+		rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+		local ray = workspace:Raycast(position + Vector3.new(0, 10, 0), Vector3.new(0, -50, 0), rayParams)
+		local groundPos = position
+		if ray then
+			groundPos = ray.Position + Vector3.new(0, 1, 0)
+		end
+
+		local orb = Instance.new("Part")
+		orb.Size = Vector3.new(1.5, 1.5, 1.5)
+		orb.Shape = Enum.PartType.Ball
+		orb.Material = Enum.Material.Neon
+		orb.Color = Color3.fromRGB(0, 255, 100)
+		orb.Position = groundPos
+		orb.Anchored = true
+		orb.CanCollide = false
+		orb.Name = "HealOrb"
+		orb.Parent = workspace
+
+		local touched = false
+		local touchConn
+		touchConn = orb.Touched:Connect(function(hit)
+			if touched then return end
+			local h = hit.Parent and hit.Parent:FindFirstChild("Humanoid")
+			if h and h == plr.Character:FindFirstChild("Humanoid") and h.Health < h.MaxHealth then
+				touched = true
+				local savedPos = orb.Position + Vector3.new(0, 2, 0)
+				touchConn:Disconnect()
+				orb:Destroy()
+
+				local newTool = createVitalBloom()
+				h.Health = 0
+				plr.CharacterAdded:Once(function(newChar)
+					local newHRP = newChar:WaitForChild("HumanoidRootPart")
+					newHRP.CFrame = CFrame.new(savedPos)
+					task.wait(0.5)
+					newTool.Parent = plr:WaitForChild("Backpack")
+				end)
+			end
+		end)
+
+		debris:AddItem(orb, 12)
+	end
+
+	tool.Activated:Connect(function()
+		local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+
+		for i = 1, math.random(3, 4) do
+			local angle = math.rad((360 / 4) * i)
+			local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * math.random(4, 10)
+			spawnHealOrb(hrp.Position + offset)
+		end
+	end)
+
+	return tool
+end
+
+local tool = createVitalBloom()
+      tool.Parent = plr:WaitForChild("Backpack")
