@@ -7,6 +7,8 @@ local function createVitalBloom()
 	tool.RequiresHandle = false
 	tool.Name = "Vital Bloom"
 
+	local cooldown = false
+
 	local function spawnHealOrb(position)
 		local rayParams = RaycastParams.new()
 		rayParams.FilterDescendantsInstances = {workspace}
@@ -55,6 +57,9 @@ local function createVitalBloom()
 	end
 
 	tool.Activated:Connect(function()
+		if cooldown then return end
+		cooldown = true
+
 		local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 		if not hrp then return end
 
@@ -63,10 +68,14 @@ local function createVitalBloom()
 			local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * math.random(4, 10)
 			spawnHealOrb(hrp.Position + offset)
 		end
+
+		task.delay(15, function()
+			cooldown = false
+		end)
 	end)
 
 	return tool
 end
 
 local tool = createVitalBloom()
-      tool.Parent = plr:WaitForChild("Backpack")
+tool.Parent = plr:WaitForChild("Backpack")
