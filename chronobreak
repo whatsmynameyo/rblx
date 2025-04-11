@@ -1,0 +1,80 @@
+local plr = game.Players.LocalPlayer
+local chr = plr.Character or plr.CharacterAdded:Wait()
+local uis = game:GetService("UserInputService")
+
+-- Tool Setup
+local tool = Instance.new("Tool")
+tool.RequiresHandle = false
+tool.Name = "ChronoBreak"
+tool.CanBeDropped = false
+tool.Parent = plr.Backpack
+
+-- Position logger
+local positionLog = {}
+task.spawn(function()
+	while true do
+		local hrp = chr:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			table.insert(positionLog, 1, hrp.Position)
+			if #positionLog > 6 then
+				table.remove(positionLog)
+			end
+		end
+		wait(0.5)
+	end
+end)
+
+-- Drop ash block (collidable -> ghost -> gone)
+local function leaveAshBlock(position)
+	local ash = Instance.new("Part")
+	ash.Size = Vector3.new(3, 0.5, 3)
+	ash.Position = position + Vector3.new(0, 0.25, 0)
+	ash.Anchored = true
+	ash.CanCollide = true
+	ash.Material = Enum.Material.Slate
+	ash.Color = Color3.new(0, 0, 0)
+	ash.Transparency = 0.2
+	ash.Name = "AshBlock"
+	ash.Parent = workspace
+
+	-- Make it non-collidable after 3 seconds
+	task.delay(3, function()
+		if ash and ash.Parent then
+			ash.CanCollide = false
+		end
+	end)
+
+	-- Fully remove after 6 seconds
+	game.Debris:AddItem(ash, 6)
+end
+
+-- Activate move
+tool.Equipped:Connect(function()
+	local debounce = false
+	local inputConn
+
+	inputConn = uis.InputBegan:Connect(function(input, gpe)
+		if gpe or debounce then return end
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			local hrp = chr:FindFirstChild("HumanoidRootPart")
+			if not hrp or #positionLog < 6 then return end
+			debounce = true
+
+			local rewindPos = positionLog[6]
+			local currentPos = hrp.Position
+
+			-- Time jump
+			hrp.CFrame = CFrame.new(rewindPos)
+
+			-- Leave behind the ash
+			leaveAshBlock(currentPos)
+
+			wait(5)
+			debounce = false
+		end
+	end)
+
+	tool.Unequipped:Connect(function()
+		if inputConn then inputConn:Disconnect() end
+	end)
+end)
