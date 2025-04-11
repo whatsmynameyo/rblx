@@ -1,0 +1,105 @@
+local plr = game.Players.LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local backpack = plr:WaitForChild("Backpack")
+local UIS = game:GetService("UserInputService")
+
+-- Create the Meteor Slam Tool
+local tool = Instance.new("Tool")
+tool.Name = "MeteorSlam"
+tool.RequiresHandle = false
+tool.CanBeDropped = false
+tool.Parent = backpack
+
+-- Control variables
+local equippedTool = nil
+local canUse = true
+local cooldown = 5
+
+-- Equip tracking
+char.ChildAdded:Connect(function(child)
+	if child:IsA("Tool") and child.Name == "MeteorSlam" then
+		equippedTool = child
+	end
+end)
+
+char.ChildRemoved:Connect(function(child)
+	if child == equippedTool then
+		equippedTool = nil
+	end
+end)
+
+-- Input detection
+UIS.InputBegan:Connect(function(input, gpe)
+	if gpe or not equippedTool then return end
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		local humanoid = char:FindFirstChild("Humanoid")
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if not humanoid or not hrp or humanoid:GetState() == Enum.HumanoidStateType.Freefall then return end
+		if not canUse then return end
+		canUse = false
+
+		-- Aura FX
+		local aura = Instance.new("ParticleEmitter")
+		aura.Texture = "rbxassetid://2529074580"
+		aura.Rate = 200
+		aura.Lifetime = NumberRange.new(0.5)
+		aura.Speed = NumberRange.new(25)
+		aura.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 0)})
+		aura.Parent = hrp
+		game.Debris:AddItem(aura, 1.2)
+
+		-- Launch
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+		bv.Velocity = Vector3.new(0, 250, 0)
+		bv.Parent = hrp
+
+		task.delay(1.2, function()
+			bv.Velocity = Vector3.zero
+			task.wait(0.2)
+			bv:Destroy()
+
+			local landed = false
+			local groundTouched
+			groundTouched = humanoid.StateChanged:Connect(function(_, new)
+				if new == Enum.HumanoidStateType.Landed and not landed then
+					landed = true
+					groundTouched:Disconnect()
+
+					-- Final Explosion
+					local explosion = Instance.new("Explosion")
+					explosion.Position = hrp.Position
+					explosion.BlastRadius = 0
+					explosion.BlastPressure = 0
+					explosion.Visible = true
+					explosion.Parent = workspace
+
+					-- Camera Shake
+					local cam = workspace.CurrentCamera
+					local shakePower = 3
+					local shakeTime = 0.4
+					local startTime = tick()
+					local conn
+					conn = game:GetService("RunService").RenderStepped:Connect(function()
+						local elapsed = tick() - startTime
+						if elapsed > shakeTime then
+							conn:Disconnect()
+						else
+							local offset = Vector3.new(
+								math.random(-shakePower, shakePower) / 10,
+								math.random(-shakePower, shakePower) / 10,
+								math.random(-shakePower, shakePower) / 10
+							)
+							cam.CFrame = cam.CFrame * CFrame.new(offset)
+						end
+					end)
+				end
+			end)
+		end)
+
+		-- Cooldown reset
+		task.delay(cooldown, function()
+			canUse = true
+		end)
+	end
+end)
