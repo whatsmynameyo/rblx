@@ -1,0 +1,148 @@
+local Players = game:GetService("Players")
+local Terrain = workspace:FindFirstChildOfClass("Terrain")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
+
+-- CONFIG
+local FLOOD_REGION_SIZE = 1024
+local FLOOD_HEIGHT_START = HRP.Position.Y - 30
+local FLOOD_HEIGHT_END = HRP.Position.Y + 200
+local FLOOD_SPEED = 2
+local OXYGEN_MAX = 10
+local oxygen = OXYGEN_MAX
+local underwater = false
+
+-- OXYGEN METER GUI
+local oxygenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+oxygenGui.Name = "OxygenMeter"
+
+local oxygenBar = Instance.new("TextLabel", oxygenGui)
+oxygenBar.Size = UDim2.new(0.3, 0, 0.05, 0)
+oxygenBar.Position = UDim2.new(0.35, 0, 0.9, 0)
+oxygenBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+oxygenBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+oxygenBar.TextScaled = true
+oxygenBar.Text = "Oxygen: " .. oxygen
+
+-- OXYGEN SYSTEM
+task.spawn(function()
+	while true do
+		local head = Character:FindFirstChild("Head")
+		if head and Terrain:ReadVoxels(Region3.new(head.Position - Vector3.new(2,2,2), head.Position + Vector3.new(2,2,2)), 4)[1][1][1] == Enum.Material.Water then
+			underwater = true
+			oxygen -= 1
+			if oxygen <= 0 then
+				Humanoid.Health = 0
+			end
+		else
+			underwater = false
+			if oxygen < OXYGEN_MAX then
+				oxygen += 1
+			end
+		end
+		oxygenBar.Text = "Oxygen: " .. oxygen
+		wait(1)
+	end
+end)
+
+-- ENEMIES FLOAT TO SURFACE
+local function makeEnemiesSwimUp()
+	local enemyFolder = workspace:FindFirstChild("Enemies")
+	for _, enemy in pairs((enemyFolder and enemyFolder:GetChildren()) or workspace:GetDescendants()) do
+		if enemy:IsA("Model") and enemy:FindFirstChild("Humanoid") and (enemy.Name == "Enemy" or (enemyFolder and enemy.Parent == enemyFolder)) then
+			local root = enemy:FindFirstChild("HumanoidRootPart")
+			if root then
+				local bodyPos = Instance.new("BodyPosition")
+				bodyPos.Position = Vector3.new(root.Position.X, FLOOD_HEIGHT_END + 10, root.Position.Z)
+				bodyPos.MaxForce = Vector3.new(0, 1e6, 0)
+				bodyPos.P = 10000
+				bodyPos.D = 100
+				bodyPos.Parent = root
+				game.Debris:AddItem(bodyPos, 15)
+			end
+		end
+	end
+end
+
+-- TSUNAMI WAVE
+local tsunami = Instance.new("Part")
+tsunami.Size = Vector3.new(300, 100, 60)
+tsunami.CFrame = HRP.CFrame * CFrame.new(0, 50, -200)
+tsunami.Anchored = false
+tsunami.CanCollide = false
+tsunami.Material = Enum.Material.Water
+tsunami.Transparency = 0.2
+tsunami.Color = Color3.fromRGB(0, 150, 255)
+tsunami.Name = "Tsunami"
+tsunami.Parent = workspace
+
+local bv = Instance.new("BodyVelocity")
+bv.Velocity = HRP.CFrame.LookVector * 250
+bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+bv.Parent = tsunami
+
+game.Debris:AddItem(tsunami, 10)
+
+-- FLOOD WATER
+task.spawn(function()
+	for height = FLOOD_HEIGHT_START, FLOOD_HEIGHT_END, FLOOD_SPEED do
+		local region = Region3.new(
+			Vector3.new(HRP.Position.X - FLOOD_REGION_SIZE/2, height, HRP.Position.Z - FLOOD_REGION_SIZE/2),
+			Vector3.new(HRP.Position.X + FLOOD_REGION_SIZE/2, height + 5, HRP.Position.Z + FLOOD_REGION_SIZE/2)
+		)
+		Terrain:FillRegion(region, 4, Enum.Material.Water)
+		makeEnemiesSwimUp()
+		wait(0.2)
+	end
+end)
+
+-- SPAWN BOAT
+local function spawnBoat()
+	local boat = Instance.new("Model", workspace)
+	boat.Name = "RescueBoat"
+
+	local base = Instance.new("Part", boat)
+	base.Size = Vector3.new(20, 2, 10)
+	base.Position = HRP.Position + Vector3.new(0, 10, 20)
+	base.Anchored = false
+	base.Material = Enum.Material.Metal
+	base.Color = Color3.fromRGB(100, 100, 100)
+	base.Name = "Base"
+	base.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, 0.5)
+	base.TopSurface = Enum.SurfaceType.Smooth
+	base.BottomSurface = Enum.SurfaceType.Smooth
+
+	local seat = Instance.new("VehicleSeat", boat)
+	seat.Size = Vector3.new(4, 1, 4)
+	seat.Position = base.Position + Vector3.new(0, 2, 0)
+	seat.Anchored = false
+	seat.Name = "DriverSeat"
+	seat.CanCollide = true
+
+	local weld = Instance.new("WeldConstraint", base)
+	weld.Part0 = base
+	weld.Part1 = seat
+
+	local float = Instance.new("BodyForce", base)
+	float.Force = Vector3.new(0, base:GetMass() * workspace.Gravity, 0)
+
+	local gyroscope = Instance.new("BodyGyro", base)
+	gyroscope.MaxTorque = Vector3.new(400000, 400000, 400000)
+	gyroscope.P = 10000
+	gyroscope.CFrame = base.CFrame
+
+	local velocity = Instance.new("BodyVelocity", base)
+	velocity.MaxForce = Vector3.new(1e5, 0, 1e5)
+	velocity.P = 10000
+	velocity.Velocity = Vector3.zero
+
+	seat.Changed:Connect(function()
+		local dir = seat.CFrame.LookVector * seat.Throttle * 50
+		velocity.Velocity = Vector3.new(dir.X, 0, dir.Z)
+	end)
+end
+
+-- Call boat spawn
+spawnBoat()
